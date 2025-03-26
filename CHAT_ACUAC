@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Bot de Cuencas Hidrológicas</title>
+    <style>
+        body {font-family:Arial,sans-serif; max-width:800px; margin:0 auto; padding:10px;}
+        h1 {color:#2196F3; font-size:1.5rem;}
+        .topics {background-color:#f0f8ff; padding:10px; border-radius:5px; margin-bottom:10px; font-size:0.9rem;}
+        #chatbox {border:1px solid #ddd; height:300px; overflow-y:auto; padding:10px; margin-bottom:10px; background-color:#f9f9f9;}
+        .user-message {background-color:#2196F3; color:white; padding:8px; border-radius:5px; margin:5px 0; max-width:80%; margin-left:auto;}
+        .bot-message {background-color:#e9e9e9; padding:8px; border-radius:5px; margin:5px 0; max-width:80%;}
+        .input-area {display:flex; margin-top:10px; flex-wrap:wrap;}
+        #userInput {flex:1; padding:8px; border:1px solid #ddd; border-radius:4px; min-width:200px;}
+        button {margin:5px; padding:8px 15px; background-color:#4CAF50; color:white; border:none; border-radius:4px; cursor:pointer;}
+        #resetBtn {background-color:#f44336;}
+        #muteBtn {background-color:#FF9800;}
+        #micBtn {background-color:#9C27B0; opacity:1;}
+        #micBtn.listening {
+            background-color: #d32f2f;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+        
+        /* Estilo para el aviso y botón externo */
+        .warning-box {
+            background-color: #ff9800;
+            color: white;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 15px 0;
+            text-align: center;
+        }
+        
+        .external-button {
+            display: block;
+            width: 80%;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #2196F3;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
+        
+        .external-button:hover {
+            background-color: #0b7dda;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+            transform: translateY(-2px);
+        }
+        
+        .arrow {
+            display: inline-block;
+            margin-left: 10px;
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Chat Bot de Cuencas Hidrológicas</h1>
+    
+    <div class="warning-box">
+        <h2>⚠️ Versión con micrófono habilitado</h2>
+        <p>Esta versión incluye funcionalidad completa de reconocimiento de voz.
+        Haz clic en el botón del micrófono para hablar con el bot.</p>
+    </div>
+    
+    <!-- REEMPLAZA ESTA URL CON LA UBICACIÓN REAL DE TU ARCHIVO HTML -->
+    <a href="" class="external-button" target="_blank">
+        🎤 ABRIR VERSIÓN COMPLETA CON MICRÓFONO <span class="arrow">→</span>
+    </a>
+    
+    <div class="topics"><b>Temas:</b> Cuencas hidrológicas, Hidrología, Erosión, Climatología, Cambio climático</div>
+    <div id="chatbox"></div>
+    
+    <div class="input-area">
+        <input type="text" id="userInput" placeholder="Escribe tu mensaje aquí...">
+        <button id="sendBtn">Enviar</button>
+        <button id="micBtn">🎤 Micrófono</button>
+        <button id="muteBtn">Silenciar</button>
+        <button id="resetBtn">Reiniciar</button>
+    </div>
+    
+    <div class="ai-links">
+        <p><b>¿Necesitas información más específica?</b> Utiliza estas herramientas de IA gratuitas:</p>
+        <a href="https://chat.openai.com/" target="_blank"><button>ChatGPT</button></a>
+        <a href="https://bard.google.com/" target="_blank"><button>Google Bard</button></a>
+        <a href="https://www.bing.com/new" target="_blank"><button>Bing Chat</button></a>
+        <a href="https://huggingface.co/chat/" target="_blank"><button>HuggingChat</button></a>
+    </div>
+
+    <script>
+        // Variables básicas
+        let userName = "";
+        let waitingForName = true;
+        let isMuted = false;
+        let isSearching = false;
+        
+        // Elementos DOM
+        const chatbox = document.getElementById('chatbox');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const muteBtn = document.getElementById('muteBtn');
+        
+        // Síntesis de voz
+        const speech = window.speechSynthesis;
+        
+        // Reconocimiento de voz
+        let recognition = null;
+        try {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.lang = 'es-ES';
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            
+            // Configurar eventos para el reconocimiento de voz
+            recognition.onresult = function(event) {
+                const transcript = event.results[0][0].transcript;
+                userInput.value = transcript;
+                micBtn.classList.remove('listening');
+                // Enviar automáticamente el mensaje después de reconocer la voz
+                sendMessage();
+            };
+            
+            recognition.onerror = function(event) {
+                console.error('Error en reconocimiento de voz:', event.error);
+                micBtn.classList.remove('listening');
+            };
+            
+            recognition.onend = function() {
+                micBtn.classList.remove('listening');
+                userInput.placeholder = "Escribe tu mensaje aquí...";
+            };
+            
+        } catch(e) {
+            console.log('El reconocimiento de voz no está disponible en este navegador:', e);
+        }
+        
+        // Base de datos de clima simple (para respuestas offline)
+        const climateData = {
+            "madrid": {
+                temp: "18-25°C",
+                condition: "Mayormente soleado",
+                humidity: "40-60%",
+                rain: "10-15%"
+            },
+            "barcelona": {
+                temp: "20-27°C",
+                condition: "Parcialmente nublado",
+                humidity: "60-70%",
+                rain: "5-10%"
+            },
+            "méxico": {
+                temp: "22-28°C",
+                condition: "Cielos despejados",
+                humidity: "45-55%",
+                rain: "5%"
+            },
+            "bogotá": {
+                temp: "12-18°C",
+                condition: "Nublado con lluvias ocasionales",
+                humidity: "70-85%",
+                rain: "40-50%"
+            },
+            "buenos aires": {
+                temp: "15-22°C",
+                condition: "Mayormente despejado",
+                humidity: "60%",
+                rain: "10%"
+            },
+            "lima": {
+                temp: "17-22°C",
+                condition: "Nublado",
+                humidity: "75-90%",
+                rain: "5%"
+            },
+            "santiago": {
+                temp: "10-22°C",
+                condition: "Despejado",
+                humidity: "30-50%",
+                rain: "5%"
+            }
+        };
+        
+        // Base de conocimientos hidrológicos (versión reducida para ejemplo)
+        const hydrologicalKnowledge = {
+            // Cuencas hidrológicas
+            "cuenca": "Una cuenca hidrológica es un área geográfica donde el agua de lluvia, nieve o deshielo converge en un punto común, como un río, lago o el océano. Es la unidad natural para la gestión del agua y los recursos naturales.",
+            "ciclo hidrológico": "El ciclo hidrológico describe el movimiento continuo del agua en, sobre y debajo de la superficie de la Tierra. Incluye procesos de evaporación, condensación, precipitación, infiltración, escorrentía y flujo subterráneo.",
+            "escorrentía": "La escorrentía es el agua de lluvia que fluye sobre la superficie del suelo. Es un componente crucial del ciclo hidrológico que contribuye al caudal de los ríos y puede transportar sedimentos y contaminantes.",
+            "infiltración": "La infiltración es el proceso mediante el cual el agua penetra en el suelo. La tasa de infiltración depende de la textura del suelo, su estructura, contenido de humedad previo y compactación.",
+            "acuífero": "Un acuífero es una formación geológica subterránea que almacena y permite el flujo de agua. Pueden ser libres (con una tabla de agua) o confinados (bajo presión entre capas impermeables).",
+            "modelación hidrológica": "La modelación hidrológica es el proceso de representar matemáticamente el comportamiento del agua en una cuenca. Los modelos pueden ser conceptuales, físicos o de caja negra, y se utilizan para predecir caudales, inundaciones o calidad del agua.",
+            "erosión hídrica": "La erosión hídrica es el proceso de degradación del suelo causado por el agua. Incluye erosión por salpicadura, laminar, en surcos y cárcavas, y afecta la productividad del suelo y calidad del agua.",
+            "cambio climático": "El cambio climático está alterando los patrones hidrológicos globales, modificando la intensidad y frecuencia de precipitaciones, aumentando eventos extremos y afectando la disponibilidad de agua en muchas regiones."
+        };
+        
+        // Función para texto a voz
+        function speakText(text) {
+            if (isMuted || !speech) return;
+            
+            try {
+                speech.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'es-ES';
+                utterance.rate = 1.0;
+                speech.speak(utterance);
+            } catch (e) {
+                console.log('Error en síntesis de voz:', e);
+            }
+        }
+        
+        // Agregar mensaje al chat
+        function addMessage(text, isBot = false) {
+            const msgDiv = document.createElement('div');
+            msgDiv.classList.add(isBot ? 'bot-message' : 'user-message');
+            msgDiv.textContent = text;
+            chatbox.appendChild(msgDiv);
+            chatbox.scrollTop = chatbox.scrollHeight;
+            
+            if (isBot) {
+                speakText(text);
+            }
+        }
+        
+        // Obtener información del clima de nuestra base de datos local
+        function getWeatherInformation(location) {
+            const normalizedLocation = location.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            
+            // Verificar si tenemos datos para esta ubicación
+            for (const [city, data] of Object.entries(climateData)) {
+                if (normalizedLocation.includes(city) || city.includes(normalizedLocation)) {
+                    const now = new Date();
+                    const day = now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+                    
+                    return `El clima para ${city.charAt(0).toUpperCase() + city.slice(1)} hoy ${day}: 
+                            Temperatura: ${data.temp}. 
+                            Condición: ${data.condition}. 
+                            Humedad: ${data.humidity}. 
+                            Probabilidad de lluvia: ${data.rain}.`;
+                }
+            }
+            
+            // Generamos una respuesta simulada si no tenemos datos específicos
+            return generateSimulatedWeather(location);
+        }
+        
+        // Generar pronóstico simulado para cualquier ciudad
+        function generateSimulatedWeather(location) {
+            // Datos climáticos aleatorios pero realistas basados en la época del año
+            const now = new Date();
+            const month = now.getMonth(); // 0-11 (enero-diciembre)
+            let randomTemp, randomCondition, randomHumidity, randomRain;
+            
+            // Ajustamos según hemisferio y estación
+            // Simplificación: asumimos hemisferio norte para generar temperaturas realistas
+            if (month >= 11 || month <= 1) { 
+                // Invierno en el norte
+                randomTemp = `${Math.floor(Math.random() * 10) - 5}-${Math.floor(Math.random() * 15)}°C`;
+                randomCondition = ["Nublado", "Parcialmente nublado", "Nevadas ligeras", "Frío", "Lluvia fría"][Math.floor(Math.random() * 5)];
+                randomHumidity = `${Math.floor(Math.random() * 20) + 60}%`;
+                randomRain = `${Math.floor(Math.random() * 40) + 20}%`;
+            } else if (month >= 2 && month <= 4) { 
+                // Primavera en el norte
+                randomTemp = `${Math.floor(Math.random() * 10) + 5}-${Math.floor(Math.random() * 15) + 15}°C`;
+                randomCondition = ["Parcialmente nublado", "Despejado con nubes ocasionales", "Lluvias ligeras", "Vientos frescos"][Math.floor(Math.random() * 4)];
+                randomHumidity = `${Math.floor(Math.random() * 20) + 50}%`;
+                randomRain = `${Math.floor(Math.random() * 30) + 10}%`;
+            } else if (month >= 5 && month <= 7) { 
+                // Verano en el norte
+                randomTemp = `${Math.floor(Math.random() * 10) + 15}-${Math.floor(Math.random() * 15) + 25}°C`;
+                randomCondition = ["Soleado", "Despejado", "Cielos claros", "Parcialmente nublado", "Caluroso"][Math.floor(Math.random() * 5)];
+                randomHumidity = `${Math.floor(Math.random() * 30) + 40}%`;
+                randomRain = `${Math.floor(Math.random() * 15) + 5}%`;
+            } else { 
+                // Otoño en el norte
+                randomTemp = `${Math.floor(Math.random() * 10) + 10}-${Math.floor(Math.random() * 15) + 15}°C`;
+                randomCondition = ["Nublado", "Parcialmente nublado", "Lluvia ocasional", "Viento fresco"][Math.floor(Math.random() * 4)];
+                randomHumidity = `${Math.floor(Math.random() * 20) + 55}%`;
+                randomRain = `${Math.floor(Math.random() * 30) + 10}%`;
+            }
+            
+            const day = now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+            
+            return `El clima aproximado para ${location} hoy ${day}: 
+                    Temperatura: ${randomTemp}. 
+                    Condición: ${randomCondition}. 
+                    Humedad: ${randomHumidity}. 
+                    Probabilidad de lluvia: ${randomRain}.`;
+        }
+        
+        // Generar pronóstico a futuro simulado
+        function generateForecastWeather(location) {
+            const now = new Date();
+            let forecastText = `Pronóstico para ${location} en los próximos días:\n\n`;
+            
+            // Generar un pronóstico para los próximos 5 días
+            for (let i = 1; i <= 5; i++) {
+                const forecastDate = new Date();
+                forecastDate.setDate(now.getDate() + i);
+                const dayName = forecastDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric' });
+                
+                const minTemp = Math.floor(Math.random() * 15) + 5;
+                const maxTemp = minTemp + Math.floor(Math.random() * 10) + 5;
+                
+                const conditions = ["Soleado", "Parcialmente nublado", "Nublado", "Lluvioso", "Tormentoso", "Despejado"];
+                const condition = conditions[Math.floor(Math.random() * conditions.length)];
+                
+                forecastText += `${dayName}: ${condition}. Temperatura: ${minTemp}°C a ${maxTemp}°C.\n`;
+            }
+            
+            return forecastText;
+        }
+        
+        // Función mejorada para detectar consultas de clima
+        function isWeatherQuery(text) {
+            const weatherKeywords = [
+                'clima', 'tiempo', 'temperatura', 'lluvia', 'llover', 'pronostico', 
+                'pronóstico', 'meteorología', 'meteorológico', 'sol', 'calor', 
+                'frío', 'frio', 'nublado', 'precipitación', 'meteo', 'viento'
+            ];
+            
+            const lowerText = text.toLowerCase();
+            
+            // Verificar si contiene palabras clave de clima
+            for (const keyword of weatherKeywords) {
+                if (lowerText.includes(keyword)) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+        
+        // Función mejorada para extraer la ubicación
+        function extractLocation(text) {
+            const lowerText = text.toLowerCase();
+            
+            // Si es una consulta de clima, intentamos extraer la ubicación
+            if (isWeatherQuery(text)) {
+                // Patrones comunes para consultas de clima
+                const patterns = [
+                    /clima (?:en|de) ([\wáéíóúüñ\s]+)/i,                  // "clima en Madrid"
+                    /tiempo (?:en|de) ([\wáéíóúüñ\s]+)/i,                 // "tiempo en Barcelona"
+                    /pronóstico (?:de|para|en) ([\wáéíóúüñ\s]+)/i,        // "pronóstico para Valencia"
+                    /pronostico (?:de|para|en) ([\wáéíóúüñ\s]+)/i,        // sin acento
+                    /(?:cómo|como) (?:está|estará|es|sera) el clima (?:en|de) ([\wáéíóúüñ\s]+)/i,  // "¿cómo está el clima en Sevilla?"
+                    /(?:va a|va|habrá|hay|hará) (?:llover|lluvia|sol|calor|frío|frio) (?:en|hoy en) ([\wáéíóúüñ\s]+)/i,  // "va a llover en Bogotá"
+                    /temperatura (?:en|de) ([\wáéíóúüñ\s]+)/i,           // "temperatura en Lima"
+                    /clima (?:para|de) ([\wáéíóúüñ\s]+)/i,               // "clima para Montevideo"
+                    /(?:el|la) (?:clima|tiempo|temperatura) (?:en|de) ([\wáéíóúüñ\s]+)/i, // "el clima en Buenos Aires"
+                    /(?:qué|que) (?:clima|tiempo) (?:hace|hay) (?:en|hoy en) ([\wáéíóúüñ\s]+)/i // "qué clima hay en Quito"
+                ];
+                
+                for (const pattern of patterns) {
+                    const match = text.match(pattern);
+                    if (match && match[1]) {
+                        // Limpiar el nombre de la ubicación
+                        return match[1].trim().replace(/[?.,;!]/g, '');
+                    }
+                }
+                
+                // Si no encontramos una ubicación con los patrones pero es una consulta de clima
+                // buscamos la última palabra que podría ser el nombre de una ciudad
+                const words = lowerText.replace(/[?.,;!]/g, '').split(' ');
+                if (words.length > 0) {
+                    // Evitar palabras comunes que no son nombres de ciudades
+                    const commonWords = ['clima', 'tiempo', 'el', 'la', 'en', 'de', 'pronostico', 'pronóstico', 
+                                       'temperatura', 'hace', 'hay', 'va', 'para', 'hoy', 'mañana', 
+                                       'lluvia', 'llover', 'sol', 'calor', 'frio', 'frío'];
+                    
+                    // Buscar la última palabra que no sea común
+                    for (let i = words.length - 1; i >= 0; i--) {
+                        if (!commonWords.includes(words[i]) && words[i].length > 3) {
+                            return words[i].charAt(0).toUpperCase() + words[i].slice(1);
+                        }
+                    }
+                }
+            }
+            
+            return null;
+        }
+        
+        // Buscar información en Wikipedia
+        async function searchWikipedia(query) {
+            try {
+                const searchUrl = `https://es.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}+hidrología+cuenca+agua&format=json&origin=*&utf8=`;
+                const searchResponse = await fetch(searchUrl);
+                const searchData = await searchResponse.json();
+                
+                if (searchData.query.search.length === 0) {
+                    return null;
+                }
+                
+                const pageId = searchData.query.search[0].pageid;
+                const contentUrl = `https://es.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&explaintext=1&pageids=${pageId}&format=json&origin=*&utf8=`;
+                
+                const contentResponse = await fetch(contentUrl);
+                const contentData = await contentResponse.json();
+                
+                const pageContent = contentData.query.pages[pageId].extract;
+                
+                // Procesar el contenido para hacerlo más conciso
+                let processedContent = pageContent;
+                if (processedContent.length > 500) {
+                    processedContent = processedContent.substring(0, 500).trim();
+                    // Asegurar que termina en una oración completa
+                    const lastDot = processedContent.lastIndexOf('.');
+                    if (lastDot > 400) {
+                        processedContent = processedContent.substring(0, lastDot + 1);
+                    } else {
+                        processedContent += "...";
+                    }
+                }
+                
+                return {
+                    title: searchData.query.search[0].title,
+                    content: processedContent,
+                    pageId: pageId
+                };
+                
+            } catch (error) {
+                console.error("Error searching Wikipedia:", error);
+                return null;
+            }
+        }
+        
+        // Procesar el mensaje del usuario y generar respuesta
+        async function processMessage(text) {
+            if (!text.trim()) return;
+            
+            // Si estamos esperando el nombre del usuario
+            if (waitingForName) {
+                userName = text.trim();
+                waitingForName = false;
+                addMessage(`¡Hola ${userName}! Soy el asistente virtual especializado en cuencas hidrológicas. Puedes preguntarme sobre temas como ciclo hidrológico, erosión, tipos de cuencas o incluso consultar el clima de cualquier lugar. ¿En qué puedo ayudarte hoy?`, true);
+                return;
+            }
+            
+            // Convertir texto a minúsculas para comparaciones
+            const lowerText = text.toLowerCase();
+            
+            // Verificar si es una consulta de clima
+            if (isWeatherQuery(lowerText)) {
+                const location = extractLocation(text);
+                if (location) {
+                    // Determinar si es pronóstico a futuro o clima actual
+                    if (lowerText.includes("pronóstico") || lowerText.includes("pronostico") || 
+                        lowerText.includes("próximos días") || lowerText.includes("proximos dias") || 
+                        lowerText.includes("semana") || lowerText.includes("mañana")) {
+                        const forecast = generateForecastWeather(location);
+                        addMessage(forecast, true);
+                    } else {
+                        const weatherInfo = getWeatherInformation(location);
+                        addMessage(weatherInfo, true);
+                    }
+                    return;
+                }
+            }
+            
+            // Buscar en la base de conocimiento hidrológico
+            for (const [keyword, info] of Object.entries(hydrologicalKnowledge)) {
+                if (lowerText.includes(keyword)) {
+                    addMessage(info, true);
+                    return;
+                }
+            }
+            
+            // Si no encontramos una respuesta específica, buscar en Wikipedia
+            addMessage("Buscando información relevante...", true);
+            isSearching = true;
+            
+            const wikiResult = await searchWikipedia(text);
+            
+            if (wikiResult) {
+                const message = `Información sobre "${wikiResult.title}":\n\n${wikiResult.content}\n\nPuedes consultar más información en Wikipedia.`;
+                addMessage(message, true);
+            } else {
+                addMessage("Lo siento, no encontré información específica sobre tu consulta. ¿Puedes reformularla o preguntar sobre otro tema relacionado con hidrología o cuencas?", true);
+            }
+            
+            isSearching = false;
+        }
+        
+        // Función para enviar mensaje
+        function sendMessage() {
+            const message = userInput.value.trim();
+            if (message) {
+                addMessage(message, false);
+                processMessage(message);
+                userInput.value = '';
+            }
+        }
+        
+        // Evento para botón de enviar
+        sendBtn.addEventListener('click', sendMessage);
+        
+        // Evento para enviar con Enter
+        userInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+        
+        // Evento para botón de reiniciar
+        resetBtn.addEventListener('click', function() {
+            chatbox.innerHTML = '';
+            waitingForName = true;
+            addMessage("¡Hola! Soy el asistente virtual de cuencas hidrológicas. ¿Cuál es tu nombre?", true);
+        });
+        
+        // Evento para botón de silenciar
+        muteBtn.addEventListener('click', function() {
+            isMuted = !isMuted;
+            this.textContent = isMuted ? "Activar voz" : "Silenciar";
+            if (isMuted) {
+                speech.cancel();
+            }
+        });
+        
+        // Evento para botón del micrófono
+        document.getElementById('micBtn').addEventListener('click', function() {
+            if (!recognition) {
+                alert('Lo sentimos, el reconocimiento de voz no es compatible con este navegador.');
+                return;
+            }
+            
+            try {
+                if (this.classList.contains('listening')) {
+                    recognition.stop();
+                    this.classList.remove('listening');
+                    userInput.placeholder = "Escribe tu mensaje aquí...";
+                } else {
+                    recognition.start();
+                    this.classList.add('listening');
+                    userInput.placeholder = "Escuchando...";
+                }
+            } catch(e) {
+                console.error('Error al activar el micrófono:', e);
+            }
+        });
+        
+        // Iniciar el chat
+        window.onload = function() {
+            addMessage("¡Hola! Soy el asistente virtual de cuencas hidrológicas. ¿Cuál es tu nombre?", true);
+        };
+    </script>
+</body>
+</html>
